@@ -155,3 +155,11 @@ function chunk(arr, size) {
 function encode(s) {
   return s.replaceAll(' ', '_');
 }
+
+export const languageSelectKb = Markup.inlineKeyboard([
+  [
+    Markup.button.callback('🇺🇦 Українська', 'SET_LANG:UA'),
+    Markup.button.callback('🇷🇺 Русский', 'SET_LANG:RU'),
+    Markup.button.callback('🇬🇧 English', 'SET_LANG:EN'),
+  ],
+]);

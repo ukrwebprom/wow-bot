@@ -17,20 +17,27 @@ import {
   isProfileComplete,
   formatProfile,
 } from '../storage/profiles.js';
+import { requireLanguage } from '../middleware/requireLanguage.js';
+import { t } from '../i18n/t.js';
+import { getLang } from '../utils/getLang.js';
 
 export function registerProfile(bot, { userState }) {
   bot.action('PROFILE', async (ctx) => {
     await ctx.answerCbQuery();
 
+    const gate = await requireLanguage(ctx);
+    if (!gate.ok) return;
+
     const userId = ctx.from.id;
-    const profile = getProfile(userId);
+    const profile = await getProfile(userId);
 
     if (isProfileComplete(profile)) {
       await ctx.reply(formatProfile(profile), profileCompleteKb);
     } else {
+      const lang = await getLang(ctx.from.id);
+
       await ctx.reply(
-        `👤 Profile is empty.\n\n` +
-          `To analyze posts better, please fill in your profile — it helps the bot adapt results to your goals, tone, and platform.`,
+        `${t('profile.empty.title', lang)}\n\n${t('profile.empty.desc', lang)}`,
         profileEmptyKb
       );
     }
@@ -43,23 +50,23 @@ export function registerProfile(bot, { userState }) {
     const userId = ctx.from.id;
     userState.set(userId, { mode: 'profile_language' });
 
-    const profile = getProfile(userId) ?? {};
-    await safeEditOrReply(
-      ctx,
-      `Step 1/6 — Language\nChoose your language:`,
-      languageKb(profile.language)
-    );
+    const profile = await getProfile(userId) ?? {};
+    const lang = await getLang(ctx.from.id); // если языка ещё нет — будет EN
+    await safeEditOrReply(ctx, t('profile.wizard.step1_language', lang), languageKb(profile.language));
   });
 
   // EXIT (выйти из мастера)
   bot.action('P_EXIT', async (ctx) => {
-    await ctx.answerCbQuery('Exited');
+    const lang = await getLang(ctx.from.id);
+    await ctx.answerCbQuery(t('profile.wizard.exited', lang));
     userState.set(ctx.from.id, { mode: 'idle' });
 
     // по желанию: удаляем экран мастера
-    try { await ctx.deleteMessage(); } catch {}
-
-    await ctx.reply('Главное меню:', mainMenuKb);
+    try {
+      await ctx.editMessageText(t('home.welcome', lang), mainMenuKb);
+    } catch {
+      await ctx.reply(t('home.welcome', lang), mainMenuKb);
+    }
   });
 
   // Назад по шагам мастера
@@ -68,31 +75,32 @@ export function registerProfile(bot, { userState }) {
 
     const where = ctx.match[1]; // LANG / PLATFORM / GOAL / VOICE / NICHE
     const userId = ctx.from.id;
-    const p = getProfile(userId) ?? {};
+    const p = await getProfile(userId) ?? {};
+    const lang = await getLang(ctx.from.id);
 
     if (where === 'LANG') {
       userState.set(userId, { mode: 'profile_language' });
-      await safeEditOrReply(ctx, `Step 1/6 — Language\nChoose your language:`, languageKb(p.language));
+      await safeEditOrReply(ctx, t('profile.wizard.step1_language', lang), languageKb(profile.language));
       return;
     }
     if (where === 'PLATFORM') {
       userState.set(userId, { mode: 'profile_platform' });
-      await safeEditOrReply(ctx, `Step 2/6 — Platform\nChoose your main platform:`, platformKb(p.platform));
+      await safeEditOrReply(ctx, t('profile.wizard.step2_platform', lang), platformKb(p.platform));
       return;
     }
     if (where === 'GOAL') {
       userState.set(userId, { mode: 'profile_goal' });
-      await safeEditOrReply(ctx, `Step 3/6 — Goal\nWhat do you want from this post?`, goalKb(p.goal));
+      await safeEditOrReply(ctx, t('profile.wizard.step3_goal', lang), goalKb(p.goal));
       return;
     }
     if (where === 'VOICE') {
       userState.set(userId, { mode: 'profile_voice' });
-      await safeEditOrReply(ctx, `Step 4/6 — Voice\nHow should you sound?`, voiceKb(p.voice));
+      await safeEditOrReply(ctx, t('profile.wizard.step4_voice', lang), voiceKb(p.voice));
       return;
     }
     if (where === 'NICHE') {
       userState.set(userId, { mode: 'profile_niche' });
-      await safeEditOrReply(ctx, `Step 5/6 — Niche\nWhat is your main topic?`, nicheKb(p.niche));
+      await safeEditOrReply(ctx, t('profile.wizard.step5_niche', lang), nicheKb(p.niche));
       return;
     }
   });
@@ -104,11 +112,11 @@ export function registerProfile(bot, { userState }) {
     const userId = ctx.from.id;
     const lang = ctx.match[1];
 
-    upsertProfile(userId, { language: lang });
+    await upsertProfile(userId, { language: lang });
     userState.set(userId, { mode: 'profile_platform' });
 
-    const p = getProfile(userId);
-    await safeEditOrReply(ctx, `Step 2/6 — Platform\nChoose your main platform:`, platformKb(p.platform));
+    const p = await getProfile(userId);
+    await safeEditOrReply(ctx, t('profile.wizard.step2_platform', lang), platformKb(p.platform));
   });
 
   // Step 2: Platform
@@ -118,11 +126,12 @@ export function registerProfile(bot, { userState }) {
     const userId = ctx.from.id;
     const platform = ctx.match[1];
 
-    upsertProfile(userId, { platform });
+    await upsertProfile(userId, { platform });
     userState.set(userId, { mode: 'profile_goal' });
 
-    const p = getProfile(userId);
-    await safeEditOrReply(ctx, `Step 3/6 — Goal\nWhat do you want from this post?`, goalKb(p.goal));
+    const p = await getProfile(userId);
+    const lang = await getLang(ctx.from.id);
+    await safeEditOrReply(ctx, t('profile.wizard.step3_goal', lang), goalKb(p.goal));
   });
 
   // Step 3: Goal
@@ -132,11 +141,12 @@ export function registerProfile(bot, { userState }) {
     const userId = ctx.from.id;
     const goal = decode(ctx.match[1]);
 
-    upsertProfile(userId, { goal });
+    await upsertProfile(userId, { goal });
     userState.set(userId, { mode: 'profile_voice' });
 
-    const p = getProfile(userId);
-    await safeEditOrReply(ctx, `Step 4/6 — Voice\nHow should you sound?`, voiceKb(p.voice));
+    const p = await getProfile(userId);
+    const lang = await getLang(ctx.from.id);
+    await safeEditOrReply(ctx, t('profile.wizard.step4_voice', lang), voiceKb(p.voice));
   });
 
   // Step 4: Voice
@@ -146,11 +156,12 @@ export function registerProfile(bot, { userState }) {
     const userId = ctx.from.id;
     const voice = decode(ctx.match[1]);
 
-    upsertProfile(userId, { voice });
+    await upsertProfile(userId, { voice });
     userState.set(userId, { mode: 'profile_niche' });
 
-    const p = getProfile(userId);
-    await safeEditOrReply(ctx, `Step 5/6 — Niche\nWhat is your main topic?`, nicheKb(p.niche));
+    const p = await getProfile(userId);
+    const lang = await getLang(ctx.from.id);
+    await safeEditOrReply(ctx, t('profile.wizard.step5_niche', lang), nicheKb(p.niche));
   });
 
   // Step 5: Niche
@@ -160,15 +171,12 @@ export function registerProfile(bot, { userState }) {
     const userId = ctx.from.id;
     const niche = decode(ctx.match[1]);
 
-    upsertProfile(userId, { niche });
+    await upsertProfile(userId, { niche });
     userState.set(userId, { mode: 'profile_boundaries' });
 
-    const p = getProfile(userId);
-    await safeEditOrReply(
-      ctx,
-      `Step 6/6 — Boundaries\nSelect what to avoid (you can pick multiple):`,
-      boundariesKb(p.boundaries ?? [])
-    );
+    const p = await getProfile(userId);
+    const lang = await getLang(ctx.from.id);
+    await safeEditOrReply(ctx, t('profile.wizard.step6_boundaries', lang), boundariesKb(p.boundaries ?? []));
   });
 
   // Step 6: Boundaries toggle
@@ -178,7 +186,7 @@ export function registerProfile(bot, { userState }) {
     const userId = ctx.from.id;
     const id = ctx.match[1];
 
-    const p = getProfile(userId) ?? {};
+    const p = await getProfile(userId) ?? {};
     const cur = Array.isArray(p.boundaries) ? p.boundaries : [];
     const set = new Set(cur);
 
@@ -186,11 +194,11 @@ export function registerProfile(bot, { userState }) {
     else set.add(id);
 
     const next = Array.from(set);
-    upsertProfile(userId, { boundaries: next });
-
+    await upsertProfile(userId, { boundaries: next });
+    const lang = await getLang(ctx.from.id);
     await safeEditOrReply(
       ctx,
-      `Step 6/6 — Boundaries\nSelect what to avoid (you can pick multiple):`,
+      t('profile.wizard.step6_boundaries', lang),
       boundariesKb(next)
     );
   });
@@ -202,15 +210,23 @@ export function registerProfile(bot, { userState }) {
     const userId = ctx.from.id;
     userState.set(userId, { mode: 'idle' });
 
-    const p = getProfile(userId);
-    await safeEditOrReply(ctx, `✅ Profile saved!\n\n${formatProfile(p)}`, profileCompleteKb);
+    const p = await getProfile(userId);
+    const lang = await getLang(ctx.from.id);
+    await safeEditOrReply(ctx, `${t('profile.wizard.saved', lang)}\n\n${formatProfile(p)}`, profileCompleteKb);
   });
 
   // BACK (общий) — вернуться в главное меню
   bot.action('BACK', async (ctx) => {
     await ctx.answerCbQuery();
     userState.set(ctx.from.id, { mode: 'idle' });
-    await ctx.reply('Главное меню:', mainMenuKb);
+
+    const profile = await getProfile(ctx.from.id);
+    const lang = profile?.language ?? 'EN';
+    try {
+      await ctx.editMessageText(t('home.welcome', lang), mainMenuKb);
+    } catch {
+      await ctx.reply(t('home.welcome', lang), mainMenuKb);
+    }
   });
 }
 

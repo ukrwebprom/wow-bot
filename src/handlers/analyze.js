@@ -2,24 +2,29 @@ import { cancelKb, mainMenuKb } from '../ui/keyboards.js';
 import { analyzePost } from "../services/openai.js";
 import { getProfile } from '../storage/profiles.js';
 import { formatResultHtml } from '../utils/formatResult.js';
+import { requireLanguage } from '../middleware/requireLanguage.js';
+import { t } from '../i18n/t.js';
 
 export function registerAnalyzeHandlers(bot, { userState }) {
 
   bot.command('analyze', async (ctx) => {
     userState.set(ctx.from.id, { mode: 'await_post' });
-    await ctx.reply(
-      'Ок. Пришли текст поста одним сообщением (или фото с подписью).',
-      cancelKb
-    );
+
+    const gate = await requireLanguage(ctx);
+    if (!gate.ok) return;
+    
+    const lang = gate.profile.language;
+    await ctx.reply(t('analyze.sendDraft', lang), cancelKb);
   });
 
   bot.action('ANALYZE', async (ctx) => {
     userState.set(ctx.from.id, { mode: 'await_post' });
-    await ctx.answerCbQuery();
-    await ctx.reply(
-      'Ок. Пришли текст поста одним сообщением (или фото с подписью).',
-      cancelKb
-    );
+
+    const gate = await requireLanguage(ctx);
+    if (!gate.ok) return;
+
+    const lang = gate.profile.language;
+    await ctx.reply(t('analyze.sendDraft', lang), cancelKb);
   });
 
   bot.action('CANCEL', async (ctx) => {
@@ -49,7 +54,7 @@ bot.on('text', async (ctx) => {
 
   const postText = txt;
 
-  const profile = getProfile(ctx.from.id);
+  const profile = await getProfile(ctx.from.id);
 
 
   let statusMsg;
@@ -81,7 +86,7 @@ bot.on('photo', async (ctx) => {
   const link = await ctx.telegram.getFileLink(fileId);
   const imageUrl = link.href; // URL картинки на серверах Telegram
 
-  const profile = getProfile(ctx.from.id);
+  const profile = await getProfile(ctx.from.id);
 
   userState.set(ctx.from.id, { mode: 'idle' });
 

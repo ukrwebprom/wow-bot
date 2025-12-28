@@ -1,59 +1,56 @@
 // src/services/openai.js
 import OpenAI from "openai";
+import { buildAnalyzePostPrompt } from "../prompts/analyzePost.prompt.js";
 
 const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const MODEL = process.env.OPENAI_MODEL || "gpt-4.1-mini";
 
-const MODEL = process.env.OPENAI_MODEL || "gpt-4.1-mini"; // текст+картинки ок :contentReference[oaicite:1]{index=1}
+function cleanJsonish(raw = "") {
+  return String(raw)
+    .trim()
+    .replace(/^```json\s*/i, "")
+    .replace(/^```\s*/i, "")
+    .replace(/```$/i, "")
+    .trim();
+}
+
+function extractFirstJsonObject(text) {
+  // Если вдруг модель добавила лишний текст — вытащим первый { ... }
+  const s = String(text);
+  const start = s.indexOf("{");
+  const end = s.lastIndexOf("}");
+  if (start === -1 || end === -1 || end <= start) return null;
+  return s.slice(start, end + 1);
+}
 
 export async function analyzePost({ text, imageUrl, profile }) {
-  const instructions =
-    `You are WOW Advisor. Analyze a draft social post and return STRICT JSON only.\n` +
-    `No markdown, no extra text.\n\n` +
-    `Output schema:\n` +
-    `{\n` +
-    `  "strengths": string[],\n` +
-    `  "issues": string[],\n` +
-    `  "recommendations": string[],\n` +
-    `  "meta": {\n` +
-    `    "length": number,\n` +
-    `    "has_image": boolean,\n` +
-    `    "platform": string|null,\n` +
-    `    "goal": string|null,\n` +
-    `    "voice": string|null,\n` +
-    `    "niche": string|null\n` +
-    `  }\n` +
-    `}`;
 
-  // Профайл пока не сохраняем — но если он есть в памяти, он сильно помогает анализу.
-  const profileHint = profile
-    ? `Profile context:\n${JSON.stringify(profile)}\n`
-    : `Profile context: null\n`;
+  // Get ready prompt here -------------------------------------------------
+  const { instructions, userText } = buildAnalyzePostPrompt({
+  text,
+  profile,
+  hasImage: Boolean(imageUrl),
+  mode: "strict", // <- тут переключаешь: "strict" | "soft" | "threads"
+  });
 
-  const userContent = [
-    { type: "input_text", text: profileHint + "\nPOST TEXT:\n" + (text || "") },
-  ];
-
-  if (imageUrl) {
-    userContent.push({ type: "input_image", image_url: imageUrl });
-  }
+  const userContent = [{ type: "input_text", text: userText }];
+  if (imageUrl) userContent.push({ type: "input_image", image_url: imageUrl });
 
   const resp = await client.responses.create({
     model: MODEL,
     instructions,
     input: [{ role: "user", content: userContent }],
-    // Можно ограничить выдачу:
     max_output_tokens: 700,
   });
 
-  // Responses API даёт удобный output_text :contentReference[oaicite:2]{index=2}
   const raw = resp.output_text?.trim() || "";
+  const cleaned = cleanJsonish(raw);
 
-  // Если модель вдруг обернула в ```json ... ```
-  const cleaned = raw
-    .replace(/^```json\s*/i, "")
-    .replace(/^```\s*/i, "")
-    .replace(/```$/i, "")
-    .trim();
-
-  return JSON.parse(cleaned);
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    const extracted = extractFirstJsonObject(cleaned);
+    if (!extracted) throw new Error("Model output is not valid JSON.");
+    return JSON.parse(extracted);
+  }
 }
