@@ -11,6 +11,15 @@ const BASE =
   `Your job: make this post perform better. No "school essay" tone.\n` +
   `Return STRICT JSON only. No markdown, no extra text.\n\n`;
 
+const INTENT_RULES =
+  `INTENT & VOICE RULES:\n` +
+  `- Preserve the author's intent and vibe. If the post is meta/ironic/complaining — keep it.\n` +
+  `- Do NOT moralize about "negativity". Focus on making it engaging and sharp.\n` +
+  `- Do NOT add fake substance like "I want to share my view" unless the draft actually contains a view.\n` +
+  `- Keep the punchline if it exists (e.g. "не стирать же"). Don't throw it away.\n` +
+  `- Be brutally practical: edits and options the user can copy-paste.\n\n`;
+
+
 const SCHEMA =
   `OUTPUT JSON schema (keys exactly like this):\n` +
   `{\n` +
@@ -31,18 +40,37 @@ const SCHEMA =
   `- platform/goal/voice/niche: use profile if present, otherwise infer ONLY if strongly implied by the text; else null.\n\n`;
 
 const MODE_RULES = {
-  strict:
-    `HARD RULES (STRICT):\n` +
-    `- Be SPECIFIC to this exact post. If you can't point to a concrete phrase from the post, don't say it.\n` +
-    `- Avoid generic advice like "add a hook" unless you show EXACTLY what to change.\n` +
-    `- Each strength/issue/recommendation MUST include a quote from the post like "..." (2–8 words).\n` +
-    `- Keep it tight: strengths 3–6 items, issues 3–7 items, recommendations 6–12 items.\n` +
-    `- Recommendations MUST include these deliverables:\n` +
-    `  (1) 3 hook options (first line) labeled as "HOOK: ..."\n` +
-    `  (2) 1 tightened rewrite (whole post) labeled as "REWRITE: ..."\n` +
-    `  (3) 2 CTA options labeled as "CTA: ..."\n` +
-    `  (4) Concrete fixes labeled as "FIX: ..."\n` +
-    `- If something is unknown, use null (don’t guess confidently).\n\n`,
+strict:
+  `HARD RULES (STRICT):\n` +
+  `- Be SPECIFIC to this exact post. If you can't quote it, don't claim it.\n` +
+  `- Avoid generic advice. Every recommendation must contain a concrete change.\n` +
+  `- Each strength/issue/recommendation MUST include a quote from the post like "..." (2–8 words).\n` +
+  `- Do NOT moralize about tone (no "too negative", "tiring", "off-putting"). If it's edgy — make it sharper, not nicer.\n` +
+  `- Match profile.voice strictly. Do not invent a different style. If voice is unknown, keep it neutral and concise.\n` +
+  `- Avoid purple prose / poetic metaphors unless profile.voice explicitly asks for it.\n` +
+  `- Keep it tight: strengths 2–4, issues 2–5, recommendations 8–12.\n\n` +
+  `VOICE GUIDE (follow profile.voice literally):\n` +
+  `- Calm & smart: clear, concise, lightly witty, no drama, no poetic metaphors.\n` +
+  `- Bold & provocative: sharper framing, stronger statements, direct questions, controlled edge.\n` +
+  `- Friendly & warm: supportive, simple words, inviting questions, gentle tone.\n` +
+  `- Dry & business: structured, short bullets, factual, no slang, no emojis unless necessary.\n` +
+  `- Irony / humor: playful self-irony, punchlines, keep it tasteful, no cringe.\n` +
+  `- Storyteller: tiny arc (setup → turn → punch), vivid detail, still compact.\n` +
+  `- Minimal: very short sentences, remove fluff, maximum signal.\n\n` +
+  `RECOMMENDATIONS MUST include these deliverables (IMPORTANT FORMAT):\n` +
+  `- Deliverable lines MUST start with the label itself (no "• ", no "-" before the label, and no numbering like "(1)").\n` +
+  `  HOOK (paradox/self-irony): ...\n` +
+  `  HOOK (direct question): ...\n` +
+  `  HOOK (vivid specificity): ...\n` +
+  `  REWRITE (minimal edit): ...\n` +
+  `  REWRITE (stronger): ...\n` +
+  `  CTA: ...\n` +
+  `  FIX: ...\n` +
+  `- Hooks MUST be different mechanics (paradox/question/specificity).\n` +
+  `- REWRITE lines MUST contain the FULL rewritten post text (not instructions like "replace X with Y").\n` +
+  `- CTA options MUST match profile.goal.\n` +
+  `- FIX items must be micro-edits (delete/replace/add/move) and each MUST include a quote.\n` +
+  `- If something is unknown, use null (don’t guess confidently).\n\n`,
 
   soft:
     `HARD RULES (SOFT):\n` +
@@ -52,17 +80,20 @@ const MODE_RULES = {
     `- Recommendations SHOULD include hooks and at least one rewrite, but if the text is too short, focus on micro-edits.\n` +
     `- Tone: friendly editor, not a teacher.\n\n`,
 
-  threads:
-    `HARD RULES (THREADS MODE):\n` +
-    `- Assume platform is Threads unless profile says otherwise.\n` +
-    `- Optimize for fast retention: first line, pacing, punch, clarity.\n` +
-    `- If the idea is bigger than a short post, propose a 3–6 part mini-thread.\n` +
-    `- Recommendations MUST include:\n` +
-    `  (1) 5 hook options labeled "HOOK: ..."\n` +
-    `  (2) 1 rewrite that fits a short Threads-style post labeled "REWRITE: ..."\n` +
-    `  (3) 1 mini-thread outline (3–6 parts) labeled "THREAD: 1) ... 2) ..."\n` +
-    `  (4) 2 CTA options labeled "CTA: ..."\n` +
-    `- Quotes "..." are required in strengths/issues (to avoid generic feedback).\n\n`,
+threads:
+  `HARD RULES (THREADS MODE):\n` +
+  `- Assume platform is Threads unless profile says otherwise.\n` +
+  `- Optimize for fast retention: first line, pacing, punch, clarity.\n` +
+  `- Preserve meta/irony vibe if the draft has it.\n` +
+  `- Quotes "..." are required in strengths/issues (to avoid generic feedback).\n\n` +
+  `RECOMMENDATIONS MUST include (use EXACT labels):\n` +
+  `  (1) 5 hooks, but at least 3 must be different mechanics (paradox/question/specificity).\n` +
+  `  (2) 2 rewrites:\n` +
+  `      - REWRITE (minimal edit): ...\n` +
+  `      - REWRITE (stronger): ...\n` +
+  `  (3) THREAD: if the idea can expand, outline 3–6 parts: "THREAD: 1) ... 2) ..."\n` +
+  `  (4) 2 CTA options "CTA: ..."\n` +
+  `  (5) 3–6 micro-edits "FIX: ..." with quotes.\n\n`,
 };
 
 export function buildAnalyzePostPrompt({
@@ -81,19 +112,24 @@ export function buildAnalyzePostPrompt({
   const rules = MODE_RULES[mode] ?? MODE_RULES.strict;
 
   const instructions =
-    BASE +
-    `Mode: ${mode}\n\n` +
-    rules +
-    languageRules +
-    SCHEMA;
+  BASE +
+  `Mode: ${mode}\n\n` +
+  INTENT_RULES +
+  rules +
+  languageRules +
+  SCHEMA;
 
   const profileHint = profile
     ? `Profile context (JSON): ${JSON.stringify(profile)}\n`
     : `Profile context: null\n`;
 
+  const charLimit =
+  profile?.platform === "Threads" ? 500 : null;
+
   const userText =
     profileHint +
     `Has image: ${hasImage ? "yes" : "no"}\n` +
+    `Char limit: ${charLimit ?? "null"}\n` +
     `POST TEXT:\n"""${text || ""}"""\n`;
 
   return { instructions, userText };

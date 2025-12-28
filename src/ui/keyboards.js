@@ -158,8 +158,8 @@ function encode(s) {
 
 export const languageSelectKb = Markup.inlineKeyboard([
   [
-    Markup.button.callback('🇺🇦 Українська', 'SET_LANG:UA'),
-    Markup.button.callback('🇷🇺 Русский', 'SET_LANG:RU'),
-    Markup.button.callback('🇬🇧 English', 'SET_LANG:EN'),
+    Markup.button.callback('Українська', 'SET_LANG:UA'),
+    Markup.button.callback('Русский', 'SET_LANG:RU'),
+    Markup.button.callback('English', 'SET_LANG:EN'),
   ],
 ]);

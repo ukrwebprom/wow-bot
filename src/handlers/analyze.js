@@ -83,6 +83,10 @@ bot.on('photo', async (ctx) => {
     return;
   }
 
+  const caption = ctx.message.caption ?? '';
+  const photos = ctx.message.photo;
+  const best = photos[photos.length - 1];
+  const fileId = best.file_id;
   const link = await ctx.telegram.getFileLink(fileId);
   const imageUrl = link.href; // URL картинки на серверах Telegram
 
