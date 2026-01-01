@@ -485,7 +485,6 @@ try {
     preset: s.lastPreset,
     inputLen: s.lastText.length,
     outputLen: out.length,
-    model: model, // если ты логируешь модель — подставь правильно
     ok: true,
   });
 
