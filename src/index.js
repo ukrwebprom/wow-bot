@@ -118,7 +118,7 @@ function presetTitleById(id) {
   return p ? p.title : id;
 }
 
-const DONATE_AMOUNTS = [10, 20, 50];
+const DONATE_AMOUNTS = [10, 20, 50, 100];
 
 function escapeHtml(s = '') {
   return s
