@@ -535,7 +535,7 @@ bot.action(/^DONATE:(MENU|\d+)$/i, async (ctx) => {
   const amount = Number(arg);
   await ctx.answerCbQuery();
 
-  if (![10, 20, 50].includes(amount)) {
+  if (![10, 20, 50, 100].includes(amount)) {
     return ctx.reply('Please choose one of the available amounts.');
   }
 
