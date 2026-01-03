@@ -8,6 +8,15 @@ import { pool } from './db/pool.js';
 import { startHttpServer } from './server/httpServer.js';
 import { upsertUserFromCtx } from './storage/users.js';
 
+import { buildMessages as buildV1 } from './prompts/packs/v1_current.js';
+import { buildMessages as buildV2 } from './prompts/packs/v2_hooked.js';
+
+const PROMPT_PACKS = { v1: buildV1, v2: buildV2 };
+function getPromptPack() {
+  const name = process.env.PROMPT_PACK || 'v1';
+  return PROMPT_PACKS[name] || PROMPT_PACKS.v1;
+}
+
 // -------------------- CONFIG --------------------
 const token = process.env.BOT_TOKEN;
 if (!token) {
@@ -254,48 +263,18 @@ function presetInstruction(presetId) {
 
 
 
-async function rewriteText({ text, presetId, makeShorter = false }) {
+async function rewriteText({ text, presetId }) {
   const model = PREMIUM_PRESETS.has(presetId) ? MODEL_PREMIUM : MODEL_FAST;
 
-  const sys = [
-    'You are an editor who turns ordinary drafts into WOW social posts.',
-    '',
-    'CRITICAL RULE (must follow): DO NOT lose concrete facts from the input.',
-    'Concrete facts include: who/what, where (including directions like "upstairs"), what happens, and key relations like "does not affect".',
-    'If a concrete element exists in the input, it MUST remain explicit in the output.',
-    'Do NOT replace specifics with vague abstractions like "voices", "chaos", "noise", "people", "somewhere".',
-    '',
-    'You MAY:',
-    '- reorder sentences, split into short paragraphs, improve rhythm and clarity, add tasteful imagery that does NOT introduce new facts.',
-    '',
-    'You MUST NOT:',
-    '- invent new facts, places, or events;',
-    '- generalize away specifics from the input.',
-    '',
-    'Output requirements:',
-    `- ${makeShorter ? '1–3' : '3–6'} short paragraphs (depending on mode).`,
-    '- The first line must hook the reader and stay on-topic.',
-    '- End with one short, strong concluding line that matches the topic.',
-    '',
-    'Return ONLY the final post text. No explanations. No labels.',
-    '',
-    'Language rule: write the output in the SAME language as the input text.',
-  ].join('\n');
+  const presetText = presetInstruction(presetId);
+  const buildMessages = getPromptPack();
 
-  const user = [
-    'Task: rewrite the input into a WOW post using the selected style preset.',
-    `Preset: ${presetId}`,
-    `Intensity (1..3): 2`,
-    makeShorter ? 'Mode: shorter by ~30–40% while preserving facts and meaning.' : 'Mode: normal length.',
-    '',
-    'Preset style guidelines:',
-    presetInstruction(presetId),
-    '',
-    'INPUT (facts here are mandatory and must stay explicit):',
-    text,
-  ]
-    .filter(Boolean)
-    .join('\n');
+  const { sys, user } = buildMessages({
+  text,
+  presetId,
+  presetText,
+  });
+
 
   const resp = await openai.chat.completions.create({
     model,
